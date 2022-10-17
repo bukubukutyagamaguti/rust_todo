@@ -3,7 +3,10 @@ mod handlers;
 
 use crate::repositories::{
     TodoRepository,
-    TodoRepositoryForMemory
+    TodoRepositoryForMemory,
+    CreateTodo,
+    UpdateTodo,
+    Todo
 };
 
 use axum::{
@@ -12,7 +15,7 @@ use axum::{
     Router
 };
 
-use handlers::create_todo;
+use handlers::{all_todo,create_todo, delete_todo, find_todo, update_todo};
 
 use std::net::SocketAddr;
 use std::{
@@ -43,7 +46,13 @@ async fn main() {
 pub fn create_app<T: TodoRepository>(repository: T) -> Router {
     Router::new()
         .route("/", get(root))
-        .route("/todos", post(create_todo::<T>))
+        .route("/todos", 
+        post(create_todo::<T>).get(all_todo::<T>))
+        .route("/todo/:id",
+                get(find_todo::<T>)
+                .delete(delete_todo::<T>)
+                .patch(update_todo::<T>),
+            )
         .layer(Extension(Arc::new(repository)))
 }
 
@@ -54,20 +63,44 @@ async fn root() -> &'static str {
 #[cfg(test)]
 mod test {
     use super::*;
-    use axum::{
-        body::Body
-    };
-    use axum::http::Request;
-    use tower::ServiceExt;
+    #[test]
+    fn todo_crud_scenario(){
+        let text = "todo text".to_string();
+        let id = 1;
+        let expected = Todo::new(id, text.clone());
 
-    #[tokio::test]
-    async fn should_return_hello_world() {
+        // create
         let repository = TodoRepositoryForMemory::new();
-        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
-        let res = create_app(repository).oneshot(req).await.unwrap();
-        let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        let todo = repository.create(CreateTodo{text});
+        assert_eq!(expected, todo);
 
-        let body: String = String::from_utf8(bytes.to_vec()).unwrap();
-        assert_eq!(body, "heeeeeeee");
+        // find
+        let todo = repository.find(todo.id).unwrap();
+        assert_eq!(expected, todo);
+
+        // all
+        let todo = repository.all();
+        assert_eq!(vec![expected], todo);
+
+        // update
+        let text = "update todo text".to_string();
+        let todo = repository.update(1, UpdateTodo {
+            text : Some(text.clone()),
+            completed: Some(true),
+        },).expect("failed update todo");
+        assert_eq!(
+            Todo {
+                id,
+                text,
+                completed: true,
+            },
+            todo
+        );
+
+        //delete
+        let res = repository.delete(id);
+        assert!(res.is_ok())
     }
+
+    
 }

@@ -10,6 +10,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use anyhow::{Context, Ok};
 
 // error系の内容を定義
 #[derive(Debug, Error)]
@@ -30,20 +31,20 @@ pub trait TodoRepository: Clone + std::marker::Send + std::marker::Sync + 'stati
 // 各構造体を設定
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct Todo {
-    id: i32,
-    text: String,
-    completed: bool,
+    pub id: i32,
+    pub text: String,
+    pub completed: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct CreateTodo {
-    text: String,   
+    pub text: String,   
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct UpdateTodo {
-    text: Option<String>,
-    completed: Option<bool>,
+    pub text: Option<String>,
+    pub completed: Option<bool>,
 }
 
 impl Todo {
@@ -86,18 +87,32 @@ impl TodoRepository for TodoRepositoryForMemory {
         todo
     }
     fn find(&self, id: i32) -> Option<Todo> {
-        todo!();
+        let store = self.read_store_ref();
+        store.get(&id).map(|todo| todo.clone())
     }
     fn all(&self) -> Vec<Todo>{
-        todo!();
+        let store = self.read_store_ref();
+        Vec::from_iter(store.values().map(|todo| todo.clone()))
     }
     
     fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo>{
-        todo!();
+        let mut store = self.write_store_ref();
+        let todo = store.get(&id).context(RepositoryError::NotFound(id))?;
+        let text = payload.text.unwrap_or(todo.text.clone());
+        let completed = payload.completed.unwrap_or(todo.completed);
+        let todo = Todo{
+            id,
+            text,
+            completed
+        };
+        store.insert(id, todo.clone());
+        Ok(todo)
     }
     
     fn delete(&self, id: i32) -> anyhow::Result<()>{
-        todo!();
+        let mut store = self.write_store_ref();
+        store.remove(&id).ok_or(RepositoryError::NotFound(id))?;
+        Ok(())
     }
     
 }
