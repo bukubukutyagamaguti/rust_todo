@@ -41,6 +41,13 @@ pub struct CreateTodo {
     pub text: String,   
 }
 
+#[cfg(test)]
+impl  CreateTodo{
+    pub fn new(text: String) -> Self {
+        Self { text }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct UpdateTodo {
     pub text: Option<String>,
